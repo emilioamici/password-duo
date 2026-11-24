@@ -20,7 +20,7 @@ export function CategoriesView() {
 
   return (
     <>
-      <PageHeader title="Categorie" subtitle={isOwner ? 'Le gestisci tu, per tutta la famiglia' : 'Condivise da tutta la famiglia'} right={<><SyncPill /><LockButton /></>} />
+      <PageHeader title="Categorie" subtitle={isOwner ? 'Gestite da te' : 'Gestite dal Capofamiglia'} right={<><SyncPill /><LockButton /></>} />
       <MascotPeek kind="mochi">
         <div className={`card flex items-center gap-3 p-4 ${isOwner ? '' : ''}`}>
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand"><ShieldCheck size={22} /></span>

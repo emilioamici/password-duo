@@ -1,4 +1,4 @@
-import { b64u } from './webpush'
+import { b64u } from './b64'
 import type { Env } from './index'
 
 /**
@@ -52,7 +52,7 @@ const allowedOrigins = (env: Env) => env.ALLOWED_ORIGINS.split(',').map((s) => s
 
 function page(status: number, title: string, text: string, back?: string): Response {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
-  const html = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CleanDuo</title>
+  const html = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PasswordDuo</title>
 <body style="font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1.25rem;line-height:1.5"><h1 style="font-size:1.3rem">${esc(title)}</h1><p>${esc(text)}</p>${back ? `<p><a href="${esc(back)}">Torna all'app</a></p>` : ''}</body></html>`
   return new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } })
 }
@@ -100,7 +100,7 @@ export async function authCallback(env: Env, req: Request): Promise<Response> {
   if (!r.ok) return page(502, 'Google ha rifiutato lo scambio', 'Controlla che l\'indirizzo di reindirizzamento e il client secret siano quelli del progetto (guida in worker/README.md).', back)
   const t = (await r.json()) as { access_token?: string; refresh_token?: string; scope?: string }
   if (!t.access_token) return page(502, 'Risposta di Google non valida', 'Riprova tra poco.', back)
-  if (!t.refresh_token) return page(400, 'Google non ha rilasciato il token di rinnovo', 'Succede se l\'app era già autorizzata. Vai su myaccount.google.com/permissions, rimuovi l\'accesso a CleanDuo e riprova.', back)
+  if (!t.refresh_token) return page(400, 'Google non ha rilasciato il token di rinnovo', 'Succede se l\'app era già autorizzata. Vai su myaccount.google.com/permissions, rimuovi l\'accesso a PasswordDuo e riprova.', back)
   if (!(t.scope ?? '').includes('/auth/drive')) return page(400, 'Permessi insufficienti', 'Serve l\'accesso a Google Drive. Riprova e lascia selezionata la casella dei permessi.', back)
   const email = await emailOf(env, t.access_token)
   if (!email) return page(502, 'Account non riconosciuto', 'Non riesco a leggere l\'account Google. Riprova.', back)
@@ -108,7 +108,7 @@ export async function authCallback(env: Env, req: Request): Promise<Response> {
   const sid = randomId(32)
   await env.SUBS.put(`sess:${sid}`, await seal(env, { rt: t.refresh_token, email, touched: Date.now() }), { expirationTtl: SESSION_TTL })
   const to = new URL(back)
-  to.hash = `cleanduo_session=${sid}`
+  to.hash = `pwduo_session=${sid}`
   return new Response(null, { status: 302, headers: { Location: to.toString(), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 }
 
