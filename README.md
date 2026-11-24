@@ -6,8 +6,8 @@ condiviso con i familiari. Progressive Web App mobile-first (React + Vite + Type
 Stile grafico, autenticazione Google e regole di invito derivano da [Clean Duo](https://github.com/emilioamici/clean-duo) e
 [MoneyDuo](https://github.com/emilioamici/money-duo): tema Mochi (chiaro) / Zenitsu (scuro), Liquid Glass solo su navigazione e fogli, i due gattini.
 
-> **Stato dell'icona e delle mascotte:** sono quelle provvisorie di Clean Duo (`public/app-icon.png`, `public/cats/*`). Quando arriva l'icona
-> definitiva si sostituiscono i file e si rigenerano `pwa-*.png`, `apple-touch-icon.png` e `favicon.png`.
+> **Icona e mascotte:** l'icona definitiva (i due gatti poliziotti con la cassaforte) è in `assets/icon-source.jpg`; `npm run icons` rigenera `pwa-*.png`, `apple-touch-icon.png`, `favicon.png` e `app-icon.png` (serve Pillow).
+> Le mascotte che fanno capolino (`public/cats/*`) sono ancora quelle provvisorie di Clean Duo.
 
 ## Funzioni
 
@@ -185,7 +185,7 @@ worker/                            Cloudflare Worker (solo accesso persistente)
 - **Tombstone senza scadenza:** le cancellazioni restano nel file (svuotate di ogni contenuto: nessun segreto), per evitare che una voce risorga da un dispositivo rimasto indietro.
 - **Solo italiano**, niente catalogo di traduzioni (Clean Duo ne ha uno it/en).
 - **Worker ridotto** all'accesso persistente: niente notifiche, ponte, Tuya. Senza il ponte, chi entra in famiglia deve passare dal Picker (un tocco, una volta sola).
-- **Mascotte e icona provvisorie** (quelle di Clean Duo, con scopa e piumino), in attesa dell'icona definitiva.
+- **Mascotte provvisorie** (quelle di Clean Duo) in attesa di versioni a tema sicurezza; l'icona è quella definitiva.
 
 ## Prove nel browser (Playwright)
 
