@@ -1,0 +1,12 @@
+node_modules
+dist
+dev-dist
+.env
+.env.local
+*.local
+*.tsbuildinfo
+worker/wrangler.toml
+worker/.wrangler
+
+# documento personale, tenuto offline
+DESIGN_SYSTEM.md

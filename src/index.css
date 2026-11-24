@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Due temi, ognuno con i colori di un gattino:
+   - Modalità Mochi (chiara): il gatto bianco e arancione, crema e arancio bruciato
+   - Modalità Zenitsu (scura): il gatto grigio scuro, ardesia con il dorato del campanello
+   Senza scelta esplicita («Automatico») si segue il dispositivo. Stessa palette di MoneyDuo. */
+:root {
+  --bg: 255 247 238;
+  --surface: 255 253 249;
+  --ink: 67 50 42;
+  --muted: 125 106 93;
+  --line: 240 225 209;
+  --brand: 176 82 15;
+  --onbrand: 255 255 255;
+  --inc: 35 118 75;
+  --exp: 192 40 63;
+  --trf: 42 107 153;
+  --glass: 255 253 249 / 0.78;
+  --glass-strong: 255 253 249 / 0.9;
+  --glass-edge: 255 255 255 / 0.75;
+  --glass-edge-soft: 255 255 255 / 0.35;
+  --glass-shade: 67 50 42 / 0.16;
+  --blob-a: 255 160 80 / 0.38;
+  --blob-b: 255 205 150 / 0.5;
+  --blob-c: 240 130 110 / 0.28;
+  color-scheme: light dark;
+}
+:root[data-theme='light'] { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: 22 24 29;
+    --surface: 33 36 43;
+    --ink: 236 238 242;
+    --muted: 163 169 181;
+    --line: 53 58 68;
+    --brand: 230 187 120;
+    --onbrand: 28 23 16;
+    --inc: 111 214 163;
+    --exp: 244 144 154;
+    --trf: 124 196 234;
+    --glass: 33 36 43 / 0.72;
+    --glass-strong: 33 36 43 / 0.9;
+    --glass-edge: 255 255 255 / 0.22;
+    --glass-edge-soft: 255 255 255 / 0.08;
+    --glass-shade: 0 0 0 / 0.5;
+    --blob-a: 230 187 120 / 0.2;
+    --blob-b: 124 140 190 / 0.22;
+    --blob-c: 90 110 160 / 0.2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: 22 24 29;
+  --surface: 33 36 43;
+  --ink: 236 238 242;
+  --muted: 163 169 181;
+  --line: 53 58 68;
+  --brand: 230 187 120;
+  --onbrand: 28 23 16;
+  --inc: 111 214 163;
+  --exp: 244 144 154;
+  --trf: 124 196 234;
+  --glass: 33 36 43 / 0.72;
+  --glass-strong: 33 36 43 / 0.9;
+  --glass-edge: 255 255 255 / 0.22;
+  --glass-edge-soft: 255 255 255 / 0.08;
+  --glass-shade: 0 0 0 / 0.5;
+  --blob-a: 230 187 120 / 0.2;
+  --blob-b: 124 140 190 / 0.22;
+  --blob-c: 90 110 160 / 0.2;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+html { overscroll-behavior: none; overflow-x: clip; }
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  overflow-x: hidden;
+  touch-action: pan-y pinch-zoom;
+}
+input, textarea { -webkit-touch-callout: default; }
+@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
+button { @apply select-none; }
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+@keyframes shine {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(220%) skewX(-20deg); }
+}
+
+@layer components {
+  .card { @apply rounded-3xl border border-line/80 bg-surface shadow-[0_1px_2px_rgb(var(--ink)/0.04),0_4px_14px_-6px_rgb(var(--ink)/0.08)]; }
+  /* Liquid Glass: velo traslucido, sfocatura, luce speculare sul bordo alto, ombra morbida */
+  .glass { @apply rounded-3xl; background: rgb(var(--glass)); -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
+    border: 1px solid rgb(var(--glass-edge-soft)); box-shadow: inset 0 1.5px 0 rgb(var(--glass-edge)), inset 0 -1px 0 rgb(var(--glass-edge-soft)), 0 10px 30px -10px rgb(var(--glass-shade)), 0 2px 6px -2px rgb(var(--glass-shade)); }
+  .glass-strong { @apply rounded-3xl; background: rgb(var(--glass-strong)); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8);
+    border: 1px solid rgb(var(--glass-edge-soft)); box-shadow: inset 0 1.5px 0 rgb(var(--glass-edge)), 0 -10px 40px -12px rgb(var(--glass-shade)); }
+  .glass-active { background: rgb(var(--brand) / 0.14); box-shadow: inset 0 1px 0 rgb(var(--glass-edge)), inset 0 0 0 1px rgb(var(--brand) / 0.12); }
+
+  .glass-btn { @apply glass relative inline-flex select-none items-center justify-center gap-2 overflow-hidden !rounded-full px-4 py-2.5 text-sm font-semibold text-ink
+    transition duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-50; }
+  .glass-btn::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%); transform: translateX(-120%) skewX(-20deg); }
+  .glass-btn:hover::after, .glass-btn:active::after { animation: shine 0.9s ease-out; }
+  .btn-primary { background: rgb(var(--brand)); color: rgb(var(--onbrand)); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 8px 20px -8px rgb(var(--brand) / 0.7); }
+  .btn-danger { @apply text-exp; }
+  .field { @apply w-full rounded-2xl border border-line bg-bg px-3.5 py-2.5 text-[15px] outline-none transition placeholder:text-muted/70 focus:border-brand focus:ring-2 focus:ring-brand/25; }
+  .label { @apply mb-1.5 mt-4 block px-1 text-xs font-semibold uppercase tracking-wide text-muted; }
+  .chip { @apply inline-flex shrink-0 select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface/80 px-3.5 py-1.5 text-sm font-medium text-ink transition active:scale-95; }
+  .chip-active { @apply border-brand bg-brand text-onbrand; }
+}
+
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* Con «Riduci trasparenza» o senza sfocatura: vetro pieno, stessa forma e stessi colori */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-strong { background: rgb(var(--surface)); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-strong { background: rgb(var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
