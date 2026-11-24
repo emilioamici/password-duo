@@ -126,3 +126,9 @@ button { @apply select-none; }
 @media (prefers-reduced-transparency: reduce) {
   .glass, .glass-strong { background: rgb(var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* Chi riduce il movimento non vede fluttuare lo sfondo né scorrere il riflesso dei pulsanti */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float1, .animate-float2, .animate-float3 { animation: none; }
+  .glass-btn:hover::after, .glass-btn:active::after { animation: none; }
+}

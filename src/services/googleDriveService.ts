@@ -135,6 +135,15 @@ export async function signIn(clientId: string, interactive: boolean): Promise<st
   })
 }
 
+/** Rinnovo silenzioso (senza finestra): riesce solo se Google ha già il consenso; altrimenti fallisce senza disturbare. */
+export async function renewSilently(clientId: string): Promise<string> {
+  const client = await getTokenClient(clientId)
+  return new Promise<string>((resolve, reject) => {
+    pending = { resolve, reject }
+    client.requestAccessToken({ prompt: 'none' })
+  })
+}
+
 export function signOut() {
   void logoutBroker()
   if (tok && window.google?.accounts?.oauth2) window.google.accounts.oauth2.revoke(tok.value, () => {})

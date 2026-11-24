@@ -98,7 +98,7 @@ export function Gate({ reconnect = false }: { reconnect?: boolean }) {
   const joinWithId = async () => {
     try { await app.joinHouse(joinId, false) } catch (e) {
       if (e instanceof drive.NotFoundError && pickerOk) await app.joinHouse(joinId, true)
-      else if (e instanceof drive.NotFoundError) throw new Error('Non riesco ad aprire la cassaforte: controlla l’ID e che ti abbia invitato con questo account Google.')
+      else if (e instanceof drive.NotFoundError) throw new Error('Con il permesso ristretto di Google serve il selettore di file (Picker) per aprire una cassaforte condivisa, ma questa installazione non lo ha configurato (VITE_GOOGLE_API_KEY e VITE_GOOGLE_APP_ID, vedi README). Se invece il Picker c’è, controlla l’ID e di aver fatto l’accesso con l’account Google invitato.')
       else throw e
     }
   }

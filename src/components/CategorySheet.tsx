@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GENERAL_CATEGORY_ID } from '../types'
 import { useVault } from '../store/VaultContext'
 import { useUi } from '../store/UiContext'
@@ -11,10 +11,14 @@ export function CategorySheet() {
   const { session, saveCategory, deleteCategory, isOwner } = useVault()
   const existing = categorySheet?.id ? session?.common.categories.find((c) => c.id === categorySheet.id && !c.deleted) : undefined
   const [name, setName] = useState(''); const [icon, setIcon] = useState('Folder'); const [color, setColor] = useState(PICK_COLORS[0])
+  // si azzera solo all'apertura: una sincronizzazione in background non deve cancellare quanto stai scrivendo
+  const existingRef = useRef(existing)
+  existingRef.current = existing
   useEffect(() => {
     if (!categorySheet) return
-    setName(existing?.name ?? ''); setIcon(existing?.icon ?? 'Folder'); setColor(existing?.color ?? PICK_COLORS[0])
-  }, [categorySheet, existing])
+    const e = existingRef.current
+    setName(e?.name ?? ''); setIcon(e?.icon ?? 'Folder'); setColor(e?.color ?? PICK_COLORS[0])
+  }, [categorySheet])
   const close = () => openCategorySheet(null)
   if (!isOwner) return null
   return (

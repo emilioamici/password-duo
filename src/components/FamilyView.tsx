@@ -1,8 +1,10 @@
-import { Cloud, Copy, Download, FileUp, HardDrive, KeyRound, LogOut, Loader2, Lock, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { Cloud, Copy, Download, FileUp, HardDrive, KeyRound, LogOut, Loader2, Lock, Palette, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { activeMembers } from '../services/vaultModel'
 import { inviteLink } from '../services/invite'
 import { copyText } from '../lib/clipboard'
+import { THEME_NAME, getTheme } from '../lib/theme'
+import { AppearanceCard } from './AppearanceCard'
 import { useVault } from '../store/VaultContext'
 import { useUi } from '../store/UiContext'
 import { MIN_FAMILY, MIN_PERSONAL } from './Gate'
@@ -11,7 +13,7 @@ import { MascotPeek } from './Mascots'
 import { Accordion, Avatar, ConfirmButton, PageHeader, PasswordInput, StrengthBar, Toggle } from './ui'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
-type Sec = 'sync' | 'members' | 'security' | 'backup' | null
+type Sec = 'sync' | 'members' | 'security' | 'look' | 'backup' | null
 const SEC_KEY = 'pwduo:open'
 
 /** Cambio di una password (famiglia o personale) con doppia digitazione. */
@@ -46,6 +48,7 @@ export function FamilyView() {
   const [email, setEmail] = useState(''); const [name, setName] = useState('')
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
   const [rotate, setRotate] = useState(false)
+  const [themeName, setThemeName] = useState(THEME_NAME[getTheme()])
   const members = file ? activeMembers(file) : []
   const guard = async (fn: () => Promise<void>) => { setBusy(true); setErr(''); try { await fn() } catch (e) { setErr(msg(e)) } finally { setBusy(false) } }
 
@@ -97,7 +100,7 @@ export function FamilyView() {
                       <p className="truncate text-sm font-semibold">{m.name}{m.id === meId && <span className="font-normal text-muted"> (tu)</span>}</p>
                       <p className="truncate text-xs text-muted">{m.email || 'solo locale'}</p>
                     </div>
-                    {isChief ? <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[11px] font-semibold text-brand">Capofamiglia</span>
+                    {isChief ? <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">Capofamiglia</span>
                       : !m.personal ? <span className="rounded-full bg-line/70 px-2 py-0.5 text-[11px] font-semibold text-muted">Invitato</span> : null}
                     {isOwner && !isChief && m.id !== meId && (
                       <ConfirmButton label="" confirmLabel="Rimuovi?" className="!p-2 text-xs" icon={<Trash2 size={16} />} onConfirm={() => void guard(async () => { await app.removeFamilyMember(m.id); setRotate(true) })} />
@@ -145,6 +148,10 @@ export function FamilyView() {
                 </>
               ) : <p className="rounded-xl bg-line/50 p-3 text-xs text-muted">La Password di Famiglia può cambiarla solo il Capofamiglia.</p>}
             </div>
+          </Accordion>
+
+          <Accordion title="Aspetto" icon={<Palette size={20} />} summary={themeName} open={open === 'look'} onToggle={() => toggle('look')}>
+            <AppearanceCard onChange={(t) => setThemeName(THEME_NAME[t])} />
           </Accordion>
 
           <Accordion title="Backup e importazione" icon={<HardDrive size={20} />} summary="Esporta il file cifrato, importa da CSV/JSON" open={open === 'backup'} onToggle={() => toggle('backup')}>

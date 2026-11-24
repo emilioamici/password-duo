@@ -5,7 +5,7 @@ import {
 } from './cryptoService'
 import {
   KeyMismatchError, UnlockError, canEditCommon, changeFamilyPassword, changePersonalSecret, createVault, makeMember, mergeFiles,
-  mergeRecords, removeMember, reopen, sealFile, tombstoneEntry, unlockVault, upsertMember, verifyPersonalSecret, type Session,
+  mergeRecords, removeMember, recoverFromStash, reopen, sealFile, tombstoneEntry, unlockVault, upsertMember, verifyPersonalSecret, type Session,
 } from './vaultModel'
 import type { Entry } from '../types'
 
@@ -204,6 +204,24 @@ describe('vaultModel', () => {
     const { file: rotated } = await changeFamilyPassword(file, annaSession, 'nuova-password-famiglia')
     await expect(mergeFiles(file, rotated, annaSession)).rejects.toBeInstanceOf(KeyMismatchError)
     await expect(reopen(rotated, annaSession)).rejects.toBeInstanceOf(KeyMismatchError)
+  })
+
+  it('dopo un cambio di Password di Famiglia le modifiche personali non sincronizzate si recuperano dalla copia messa da parte', async () => {
+    const { file, annaSession, bruno } = await house()
+    // Bruno ha modificato offline: una voce personale e una comune (copia locale "sporca")
+    const b0 = await unlockVault(file, bruno.id, FAM, BRUNO) // Bruno è già entrato e il suo blocco personale è su Drive
+    const base = b0.file
+    const b = await unlockVault(base, bruno.id, FAM, BRUNO)
+    b.session.personal.entries.push(entry('p1', { title: 'Personale offline', createdBy: bruno.id }))
+    b.session.common.entries.push(entry('c1', { title: 'Comune offline', createdBy: bruno.id }))
+    const stash = await sealFile(b.file, b.session, { common: true, personal: true })
+    // intanto Anna ruota la Password di Famiglia
+    const { file: rotated } = await changeFamilyPassword(base, annaSession, 'nuova-password-famiglia')
+    const fresh = await unlockVault(rotated, bruno.id, 'nuova-password-famiglia', BRUNO)
+    const r = await recoverFromStash(stash, fresh.session)
+    expect(r.personal).toBe(true)
+    expect(r.common).toBe(false) // cifrata con la chiave vecchia: non recuperabile
+    expect(r.session.personal.entries.map((e) => e.id)).toEqual(['p1'])
   })
 
   it('cambio password personale', async () => {

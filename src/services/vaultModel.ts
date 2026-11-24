@@ -302,6 +302,29 @@ export async function mergeFiles(local: VaultFile, remote: VaultFile, session: S
   return { file: { ...newer, houseName: newer.houseName, common, members, lastUpdated: Math.max(local.lastUpdated, remote.lastUpdated) }, session: next }
 }
 
+/**
+ * Recupera le modifiche non sincronizzate di una copia locale messa da parte (perché una password è cambiata altrove).
+ * Ogni blocco si prova per conto suo con le chiavi di ORA: quello la cui chiave non è cambiata si apre e viene unito;
+ * l'altro, cifrato con la chiave vecchia, non è recuperabile.
+ */
+export async function recoverFromStash(stash: VaultFile, s: Session): Promise<{ session: Session; common: boolean; personal: boolean }> {
+  let next = s; let common = false; let personal = false
+  try {
+    const d = await openBlock<CommonData>(stash.common, s.commonKey, aadCommon(stash.vaultId), 'common')
+    const m = mergeCommon(s.common, d)
+    if (canon(m) !== canon(s.common)) { next = { ...next, common: m }; common = true }
+  } catch { /* chiave vecchia: non recuperabile */ }
+  const mine = stash.members.find((m) => m.id === s.memberId)?.personal
+  if (mine) {
+    try {
+      const d = await openBlock<PersonalData>(mine, s.personalKey, aadPersonal(stash.vaultId, s.memberId), 'personal')
+      const m = mergePersonal(next.personal, d)
+      if (canon(m) !== canon(next.personal)) { next = { ...next, personal: m }; personal = true }
+    } catch { /* idem */ }
+  }
+  return { session: next, common, personal }
+}
+
 /** Le due copie hanno lo stesso contenuto? (per sapere se serve caricare) */
 export const sameFile = (a: VaultFile, b: VaultFile): boolean =>
   a.houseName === b.houseName && sameBlock(a.common, b.common) && a.members.length === b.members.length &&

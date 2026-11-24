@@ -2,7 +2,7 @@
 const { chromium, devices } = require('playwright')
 const S = process.argv[2] || 'e2e/out'; require('fs').mkdirSync(S + '/shots', { recursive: true })
 const USERS = { 'tok-anna': { email: 'anna@example.com', name: 'Anna Rossi' }, 'tok-bruno': { email: 'bruno@example.com', name: 'Bruno Rossi' } }
-const drive = { files: {}, n: 0 } // id -> {name, content, version, owner, writers:Set, perms:[]}
+const drive = { files: {}, n: 0, delayMedia: 0, blocked: new Set() } // id -> {name, content, version, owner, writers:Set, perms:[]}
 const meta = (f, id, user) => ({ id, name: f.name, version: String(f.version), modifiedTime: new Date().toISOString(), owners: [{ emailAddress: f.owner }], capabilities: { canShare: user === f.owner, canEdit: true } })
 const can = (f, email) => f.owner === email || f.writers.has(email)
 const errs = []
@@ -16,6 +16,7 @@ async function mockDrive(ctx, who) {
     const req = route.request(); const url = new URL(req.url())
     const tok = (req.headers()['authorization'] || '').replace('Bearer ', ''); const user = USERS[tok]
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (drive.blocked.has(tok)) return route.abort('internetdisconnected')
     if (!user) return json(401, {})
     const p = url.pathname
     if (p === '/drive/v3/about') return json(200, { user: { emailAddress: user.email, displayName: user.name } })
@@ -31,6 +32,7 @@ async function mockDrive(ctx, who) {
     if (m) {
       const f = drive.files[m[1]]
       if (!f || !can(f, user.email)) return json(404, {})
+      if (req.method() === 'GET' && url.searchParams.get('alt') === 'media' && drive.delayMedia) await new Promise((r) => setTimeout(r, drive.delayMedia))
       if (req.method() === 'GET') return url.searchParams.get('alt') === 'media' ? route.fulfill({ status: 200, contentType: 'application/json', body: f.content }) : json(200, meta(f, m[1], user.email))
       if (req.method() === 'PATCH') { f.content = req.postData(); f.version++; return json(200, meta(f, m[1], user.email)) }
     }
@@ -115,20 +117,44 @@ const titles = async (page) => page.$$eval('ul.mt-3 li button[aria-label^="Apri 
   t = await titles(A.page); const tb = await titles(B.page)
   ok(['Spotify', 'Disney+', 'Netflix'].every((x) => t.includes(x)), 'Anna converge: ' + JSON.stringify(t))
   ok(['Spotify', 'Disney+', 'Netflix'].every((x) => tb.includes(x)), 'Bruno converge: ' + JSON.stringify(tb))
+  // una sync lenta NON deve riaprire una cassaforte bloccata nel frattempo
+  await addEntry(B.page, 'common', 'Hulu'); await sync(B.page)
+  drive.delayMedia = 1800
+  await A.page.click('[aria-label="Sincronizza"]'); await A.page.waitForTimeout(300)
+  await A.page.click('[aria-label="Blocca ora"]'); await A.page.waitForSelector('text=Cassaforte bloccata')
+  await A.page.waitForTimeout(4500)
+  ok(await A.page.locator('text=Cassaforte bloccata').count() === 1 && await A.page.locator('[data-testid=count]').count() === 0, 'una sync lenta non riapre la cassaforte bloccata')
+  drive.delayMedia = 0
+  await A.page.fill('[aria-label="Password di Famiglia"]', FAM); await A.page.fill('[aria-label="Password personale"]', 'personale-anna-123')
+  await A.page.click('button:has-text("Sblocca")'); await A.page.waitForSelector('[data-testid=count]', { timeout: 20000 })
+  ok((await titles(A.page)).includes('Hulu'), 'dopo lo sblocco Anna vede la voce arrivata durante la sync lenta')
+  // una bozza aperta non si azzera quando una sync in background porta novità
+  await B.page.click('[aria-label="Nuova voce"]'); await B.page.fill('#et', 'Bozza importante')
+  await addEntry(A.page, 'common', 'Zeta'); await A.page.waitForTimeout(3000)
+  await B.page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await B.page.waitForTimeout(3000)
+  ok(await B.page.inputValue('#et') === 'Bozza importante', 'la bozza di una voce non si azzera con una sync in background')
+  await B.page.keyboard.press('Escape'); await B.page.waitForTimeout(500)
   // ricarica Anna: la copia locale cifrata torna e si sblocca
   await A.page.reload(); await A.page.waitForSelector('text=Cassaforte bloccata')
   await A.page.fill('[aria-label="Password di Famiglia"]', FAM); await A.page.fill('[aria-label="Password personale"]', 'personale-anna-123')
   await A.page.click('button:has-text("Sblocca")'); await A.page.waitForSelector('[data-testid=count]', { timeout: 20000 })
   ok((await titles(A.page)).includes('Banca di Anna'), 'dopo la ricarica Anna ritrova le sue voci personali')
+  // Bruno lavora offline (una voce personale e una comune), intanto Anna ruota la Password di Famiglia
+  await B.page.waitForTimeout(2500); drive.blocked.add('tok-bruno')
+  await addEntry(B.page, 'personal', 'Offline personale'); await addEntry(B.page, 'common', 'Offline comune'); await B.page.waitForTimeout(2500)
   // rotazione della Password di Famiglia da parte di Anna → Bruno deve reinserirla
   await A.page.click('nav [aria-label="Famiglia"]'); await A.page.click('button:has-text("Sicurezza")'); await A.page.waitForTimeout(300)
   await A.page.fill('[aria-label="Nuova Password di Famiglia"]', 'nuova-famiglia-2027'); await A.page.fill('[aria-label="Ripeti Password di Famiglia"]', 'nuova-famiglia-2027')
   await A.page.locator('form:has([aria-label="Nuova Password di Famiglia"]) button:has-text("Cambia")').click(); await A.page.waitForTimeout(2500)
+  drive.blocked.delete('tok-bruno')
   await B.page.click('[aria-label="Sincronizza"]'); await B.page.waitForSelector('text=La Password di Famiglia è stata cambiata', { timeout: 15000 })
+  ok(await B.page.locator('text=messe da parte').count() > 0, 'Bruno è avvisato che le sue modifiche non sincronizzate sono state messe da parte')
   ok(true, 'Bruno viene bloccato e avvisato del cambio password (nessuna scrittura con la chiave vecchia)')
   await B.page.fill('[aria-label="Password di Famiglia"]', 'nuova-famiglia-2027'); await B.page.fill('[aria-label="Password personale"]', 'personale-bruno-456')
   await B.page.click('button:has-text("Sblocca")'); await B.page.waitForSelector('[data-testid=count]', { timeout: 20000 })
   ok((await titles(B.page)).includes('Segreto di Bruno'), 'con la nuova password Bruno ritrova anche le sue voci personali')
+  ok((await titles(B.page)).includes('Offline personale'), 'la voce personale scritta offline prima del cambio password viene recuperata')
+  ok(await B.page.locator('text=Recuperate le modifiche').count() > 0, 'Bruno vede l’avviso di recupero')
   // rimozione di Bruno
   await A.page.click('nav [aria-label="Famiglia"]'); await A.page.click('button:has-text("Membri e condivisione")').catch(() => {}); await A.page.waitForTimeout(300)
   await A.page.waitForSelector('text=Bruno')

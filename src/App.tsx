@@ -15,7 +15,7 @@ import { useVault } from './store/VaultContext'
 
 export default function App() {
   const { tab } = useUi()
-  const { ready, file, session, meta, status, offlineSkipped } = useVault()
+  const { ready, file, session, meta, status, offlineSkipped, notice, setNotice } = useVault()
   const scroller = useRef<HTMLDivElement>(null)
   useEffect(() => { scroller.current?.scrollTo({ top: 0 }) }, [tab, !!session])
 
@@ -36,6 +36,13 @@ export default function App() {
             ) : unlocking ? (
               <UnlockScreen />
             ) : (
+              <>
+              {notice && (
+                <div role="status" className="card mt-3 flex items-start gap-3 p-3 text-sm">
+                  <p className="min-w-0 flex-1">{notice}</p>
+                  <button className="chip !px-3 !py-1" onClick={() => setNotice('')}>Ok</button>
+                </div>
+              )}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={tab} initial={{ opacity: 0, y: 10, filter: 'blur(6px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -6, filter: 'blur(6px)' }} transition={{ duration: 0.18 }} className="pt-4">
                   {tab === 'vault' && <VaultView />}
@@ -44,6 +51,7 @@ export default function App() {
                   {tab === 'family' && <FamilyView />}
                 </motion.div>
               </AnimatePresence>
+              </>
             )}
           </div>
           <div id="shell-overlay" className="pointer-events-none absolute inset-0 z-30" />

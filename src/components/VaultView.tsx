@@ -34,7 +34,7 @@ function EntryCard({ item }: { item: Item }) {
           <span className="block truncate text-xs text-muted">{e.username || 'Nessun username'}</span>
           <span className="mt-1 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-line/70 px-2 py-0.5 text-[11px] font-semibold text-muted"><Icon size={11} />{c.name}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.scope === 'common' ? 'bg-brand/15 text-brand' : 'bg-line/70 text-muted'}`}>{item.scope === 'common' ? 'Comune' : 'Personale'}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.scope === 'common' ? 'bg-brand/10 text-brand' : 'bg-line/70 text-muted'}`}>{item.scope === 'common' ? 'Comune' : 'Personale'}</span>
           </span>
         </span>
       </button>

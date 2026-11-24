@@ -1,5 +1,5 @@
 import { Copy, ExternalLink, Eye, EyeOff, Pencil, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GENERAL_CATEGORY_ID, type Entry, type Scope } from '../types'
 import { canEditCommon } from '../services/vaultModel'
 import { copyText } from '../lib/clipboard'
@@ -39,17 +39,29 @@ export function EntrySheet() {
   const [showPw, setShowPw] = useState(false)
   const [gen, setGen] = useState(false)
 
+  // Il form si azzera SOLO all'apertura del foglio (o su un'altra voce), mai perché una sincronizzazione in background
+  // ha rigenerato gli oggetti decifrati: altrimenti si perderebbe quanto stai scrivendo.
+  const foundRef = useRef(found)
+  foundRef.current = found
   useEffect(() => {
     if (!entrySheet) return
     setShowPw(false); setGen(false)
-    if (found) {
-      const e: Entry = found.entry
+    const cur = foundRef.current
+    if (cur) {
+      const e: Entry = cur.entry
       setF({ title: e.title, categoryId: e.categoryId, username: e.username, password: e.password, url: e.url, notes: e.notes, color: e.color })
-      setScope(found.scope); setEditing(false)
+      setScope(cur.scope); setEditing(false)
     } else {
       setF({ ...EMPTY, password: entrySheet.password ?? '' }); setScope(entrySheet.scope ?? 'personal'); setEditing(true)
     }
-  }, [entrySheet, found])
+  }, [entrySheet])
+  // in sola consultazione i valori seguono la voce (se un familiare la aggiorna); in modifica non si tocca nulla
+  useEffect(() => {
+    if (editing || !found) return
+    const e = found.entry
+    setF({ title: e.title, categoryId: e.categoryId, username: e.username, password: e.password, url: e.url, notes: e.notes, color: e.color })
+    setScope(found.scope)
+  }, [found, editing])
 
   const close = () => openEntrySheet(null)
   const canEdit = !found || found.scope === 'personal' || canEditCommon(found.entry, meId, isOwner)
@@ -121,7 +133,7 @@ export function EntrySheet() {
       ) : (
         <div className="space-y-3 pt-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-brand/15 px-2 py-0.5 font-semibold text-brand">{scope === 'common' ? 'Comune' : 'Personale'}</span>
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 font-semibold text-brand">{scope === 'common' ? 'Comune' : 'Personale'}</span>
             <span className="rounded-full bg-line/70 px-2 py-0.5 font-semibold text-muted">{cats.find((c) => c.id === f.categoryId)?.name ?? 'Generale'}</span>
             {scope === 'common' && authorName && <span className="text-muted">di {authorName}</span>}
           </div>

@@ -88,7 +88,7 @@ La copia locale e quella su Drive sono **sempre** cifrate: ogni modifica ricifra
   nel file, che qualunque familiare con permesso di scrittura potrebbe modificare. Il file è creato con `writersCanShare: false`: **solo il proprietario può invitare o togliere persone**.
 - **Invito:** *Famiglia → Membri e condivisione → Invita*. L'app condivide il file con ruolo `writer` (Drive manda l'email con il link) e aggiunge il membro all'elenco.
   Chi riceve l'invito apre il link, accede con **quell'account Google**, e viene associato al membro tramite l'email (mai duplicati). Con il permesso ristretto `drive.file` il
-  primo ingresso richiede un tocco sul **selettore di Google** (Picker), che mostra solo quel file. In alternativa: ID famiglia o link incollati nel Gate.
+  primo ingresso richiede un tocco sul **selettore di Google** (Picker), che mostra solo quel file: è **obbligatorio** per ogni invitato (vedi «Setup Google Cloud»). ID famiglia o link incollati nel Gate servono a indicare quale file mostrare nel Picker.
 - **La Password di Famiglia non viaggia con l'invito:** va comunicata di persona.
 - **Rimozione:** il Capofamiglia revoca il permesso su Drive e segna il membro come rimosso (il suo blocco personale viene eliminato dal file). Poiché la persona
   conosceva la Password di Famiglia e può avere una copia vecchia del file, **l'app consiglia di cambiare la Password di Famiglia** subito dopo.
@@ -109,6 +109,8 @@ Motore in `src/store/VaultContext.tsx`, Drive in `src/services/googleDriveServic
   copie sono in conflitto, vince quella con `rev` più alto (c'è un test: il merge di Bruno non tocca il blocco di Anna).
 - **Non si carica mai** quando: la copia locale è assente o non allineata (si adotta Drive); il blocco comune remoto non si decifra con la chiave in memoria (la Password di Famiglia
   è stata cambiata altrove: si blocca e si chiede la nuova); la cassaforte è bloccata e Drive è cambiato (non si può unire senza chiavi: si attende lo sblocco).
+- **Una sync non apre né sovrascrive nulla di nuovo.** Ogni passata lavora su una «fotografia» di file e sessione: se durante le attese di rete cambia qualcosa (una modifica, un blocco, uno sblocco) non si applica niente e si riparte. Una sync lenta non può quindi riaprire una cassaforte appena bloccata (c'è un test).
+- **Password cambiata altrove con modifiche non sincronizzate:** si adotta la copia di Drive, la copia locale viene **messa da parte** (cifrata, in IndexedDB) e dopo il nuovo sblocco si recuperano i blocchi la cui chiave non è cambiata. Le voci *personali* scritte offline sopravvivono a un cambio della Password di Famiglia; le voci *comuni* modificate offline in quel caso no (sono cifrate con la chiave vecchia) e l'app lo dice.
 - **Errori:** sessione scaduta → «Riconnetti» (con possibilità di continuare offline); rete assente → stato Offline e nuovo tentativo; sola lettura → errore esplicito, nessun upload.
 
 > Resta una finestra di millisecondi tra il controllo di versione e la scrittura: Drive non ha un «if-match». Non è una perdita permanente: l'altro dispositivo conserva le sue modifiche e le
@@ -121,20 +123,20 @@ Motore in `src/store/VaultContext.tsx`, Drive in `src/services/googleDriveServic
    con il Worker **pubblica l'app** (in *Testing* i token di rinnovo scadono dopo 7 giorni). Finché non è verificata compare «app non verificata»: *Avanzate → Vai a Password Duo*.
 3. **Credenziali → ID client OAuth → Applicazione web.** Origini JavaScript autorizzate: `http://localhost:5173` e `https://<utente>.github.io` (solo schema e dominio).
    Se usi il Worker, aggiungi tra gli URI di reindirizzamento `https://<worker>.workers.dev/auth/callback`.
-4. **(Picker, consigliato)** crea una **chiave API** limitata alla Picker API e annota il **numero del progetto** (è l'`APP_ID`).
+4. **Picker (necessario per i familiari invitati).** Con il permesso ristretto `drive.file` l'app vede solo i file che ha creato o che l'utente ha scelto con il selettore di Google: un invitato non può aprire il file né col link né con l'ID finché non lo sceglie una volta nel **Picker**. Abilita la **Google Picker API**, crea una **chiave API** limitata a quella API e annota il **numero del progetto** (è l'`APP_ID`). Senza Picker il Capofamiglia usa l'app normalmente, ma nessun invitato riesce a entrare.
 5. Su GitHub: *Settings → Secrets and variables → Actions → **Variables***:
 
 | Variabile | Valore |
 |---|---|
 | `VITE_GOOGLE_CLIENT_ID` | ID client OAuth |
-| `VITE_GOOGLE_API_KEY` · `VITE_GOOGLE_APP_ID` | chiave API e numero del progetto (Picker) |
+| `VITE_GOOGLE_API_KEY` · `VITE_GOOGLE_APP_ID` | chiave API e numero del progetto (Picker: **obbligatorie per gli invitati**) |
 | `VITE_AUTH_URL` | *(facoltativa)* URL del Worker, senza `/` finale |
 
 Sono identificativi **pubblici** (finiscono nel codice del sito), non segreti. Il *client secret* non va mai nel repository: sta solo nel Worker.
 
 ## Accesso persistente (Worker, facoltativo)
 
-Vedi [`worker/README.md`](worker/README.md). Senza Worker l'accesso a Google è un popup di un'ora, rinnovato in modo silenzioso a ogni tocco. Con il Worker l'accesso dura 180 giorni di
+Vedi [`worker/README.md`](worker/README.md). Senza Worker l'accesso a Google dura un'ora: l'app lo rinnova in modo silenzioso (`prompt: 'none'`) al primo tocco quando restano meno di 15 minuti, e se Google richiede il consenso compare «Riconnetti». Con il Worker l'accesso dura 180 giorni di
 inattività, senza popup. Il Worker non vede la cassaforte: conserva solo i token di rinnovo di Google, cifrati.
 
 ## Sviluppo
@@ -178,6 +180,7 @@ worker/                            Cloudflare Worker (solo accesso persistente)
   complicare il modello (richiede di fissare la chiave pubblica al primo uso). È il primo miglioramento consigliato.
 - **Niente Content-Security-Policy** nel `index.html`: Google Identity Services e il Picker caricano script e frame da più domini e un CSP troppo stretto li romperebbe in modo silenzioso
   (non verificabile senza un progetto Google reale). Per una messa in produzione seria è una difesa in profondità raccomandata contro lo XSS.
+- **Tema:** tre scelte (Automatico / Mochi / Zenitsu) in *Famiglia → Aspetto*; `prefers-reduced-motion` ferma lo sfondo animato.
 - **Pulizia degli appunti: best effort.** Il browser può rifiutare `writeText('')` se la pagina non ha il focus.
 - **Tombstone senza scadenza:** le cancellazioni restano nel file (svuotate di ogni contenuto: nessun segreto), per evitare che una voce risorga da un dispositivo rimasto indietro.
 - **Solo italiano**, niente catalogo di traduzioni (Clean Duo ne ha uno it/en).
@@ -196,11 +199,11 @@ node e2e/drive-e2e.cjs    # due dispositivi (Capofamiglia + invitato) contro un 
 
 ## Cosa è stato verificato (e cosa no)
 
-**Automatico (30 test):** cifratura/decifrazione con AAD, IV sempre nuovi, parametri KDF fuori intervallo, generatore (almeno un carattere per gruppo, lunghezza, uniformità, mescolamento),
+**Automatico (31 test):** cifratura/decifrazione con AAD, IV sempre nuovi, parametri KDF fuori intervallo, generatore (almeno un carattere per gruppo, lunghezza, uniformità, mescolamento),
 file senza testo in chiaro, sblocco e distinzione tra le due password, isolamento dei blocchi personali, AAD contro lo scambio di blocchi, merge che non tocca i blocchi altrui,
 merge commutativo/idempotente con tombstone, cambio delle due password, rimozione di un membro, parser CSV/JSON, endpoint del Worker.
 
-**In browser (Playwright, iPhone 14):** con Google Drive **simulato** (script `e2e/drive-e2e.cjs`, due dispositivi): creazione della famiglia con `writersCanShare:false`, invito, ingresso di Bruno senza duplicati, isolamento delle voci personali, nessun testo in chiaro nel file su Drive, convergenza di modifiche concorrenti, ricarica con copia locale cifrata, cambio della Password di Famiglia (l'altro dispositivo si blocca e non scrive con la chiave vecchia), rimozione di un membro. Con la cassaforte locale (`e2e/locale.cjs`, tema chiaro e scuro): creazione di una cassaforte locale, aggiunta di voci personali e comuni, nessun testo in chiaro in IndexedDB, blocco/sblocco con password
+**In browser (Playwright, iPhone 14):** con Google Drive **simulato** (script `e2e/drive-e2e.cjs`, due dispositivi): creazione della famiglia con `writersCanShare:false`, invito, ingresso di Bruno senza duplicati, isolamento delle voci personali, nessun testo in chiaro nel file su Drive, convergenza di modifiche concorrenti, ricarica con copia locale cifrata, una sync lenta che non riapre una cassaforte bloccata, bozza di una voce che non si azzera con una sync in background, cambio della Password di Famiglia (l'altro dispositivo si blocca, non scrive con la chiave vecchia e recupera le voci personali scritte offline), rimozione di un membro. Il Drive simulato è più permissivo di `drive.file`: elenca ed apre i file condivisi senza Picker, quindi **non** prova il passaggio dal selettore di Google. Con la cassaforte locale (`e2e/locale.cjs`, tema chiaro e scuro): creazione di una cassaforte locale, aggiunta di voci personali e comuni, nessun testo in chiaro in IndexedDB, blocco/sblocco con password
 sbagliata e giusta, ricarica, mostra/nascondi, nessuna sfocatura sulle card (solo su nav e fogli), nessuno scorrimento orizzontale.
 
 **Non verificato:** OAuth e Drive **reali** (le prove usano un Drive simulato che replica solo le chiamate usate dall'app), Picker reale, deploy reale del Worker, invito reale tra due account, sincronizzazione tra due dispositivi veri. Sono i primi passi da fare dopo il setup.

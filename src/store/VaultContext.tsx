@@ -14,13 +14,13 @@ import {
 import { uid } from '../services/cryptoService'
 import {
   AVATARS, KeyMismatchError, MEMBER_COLORS, activeMembers, canEditCommon, changeFamilyPassword, changePersonalSecret, createVault,
-  makeMember, mergeFiles, parseVault, removeMember, reopen, sameFile, sealFile, tombstoneCategory, tombstoneEntry, unlockVault,
+  makeMember, mergeFiles, parseVault, recoverFromStash, removeMember, reopen, sameFile, sealFile, tombstoneCategory, tombstoneEntry, unlockVault,
   upsertMember, type Session,
 } from '../services/vaultModel'
 import * as drive from '../services/googleDriveService'
 import { hasSession } from '../services/broker'
 import { clearInvite, inviteLink } from '../services/invite'
-import { loadCache, saveCache } from '../services/cache'
+import { loadCache, loadStash, saveCache, saveStash } from '../services/cache'
 
 export type SyncStatus = 'local' | 'idle' | 'syncing' | 'offline' | 'auth' | 'error'
 export interface Meta {
@@ -39,6 +39,7 @@ const META_KEY = 'pwduo:sync'
 const PREFS_KEY = 'pwduo:prefs'
 const CONFIG_KEY = 'pwduo:config'
 const EMAIL_KEY = 'pwduo:email'
+const STASH_KEY = 'pwduo:stash'
 const DEFAULT_PREFS: Prefs = { autoLockMin: 2, lockOnHide: true, clearClipboard: true }
 /** Tolleranza prima di bloccare quando l'app va in background (serve a incollare altrove una password appena copiata). */
 const HIDE_GRACE_MS = 20_000
@@ -224,6 +225,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     else { setStatus('error'); setStatusMessage(errMsg(e)) }
   }, [])
 
+  /** Una password è cambiata altrove: si adotta la copia di Drive, ma le modifiche locali non sincronizzate vengono messe da parte (cifrate) per recuperarle allo sblocco. */
+  const adoptAfterMismatch = useCallback(async (e: KeyMismatchError, local: VaultFile | null, dirty: boolean, remote: VaultFile, remoteVersion: string) => {
+    if (dirty && local) {
+      await saveStash(local)
+      try { localStorage.setItem(STASH_KEY, e.which) } catch { /* noop */ }
+    }
+    setFile(remote); setMeta({ version: remoteVersion, dirty: false }); setSession(null)
+    setLockReason(dirty ? `${e.message} Le modifiche non sincronizzate sono state messe da parte e si recuperano dopo lo sblocco.` : e.message)
+    persist(); setStatus('idle')
+  }, [persist, setFile, setMeta, setSession])
+
   const runSync = useCallback(async () => {
     if (metaRef.current.mode !== 'drive' || !metaRef.current.fileId) return
     if (syncing.current) { again.current = true; return }
@@ -235,23 +247,28 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const fileId = metaRef.current.fileId
       let done = false
       for (let attempt = 0; attempt < 5 && !done; attempt++) {
+        // Si lavora su una "fotografia" di file e sessione: se uno dei due cambia durante le attese di rete
+        // (modifica, blocco, sblocco) non si applica nulla e si riparte. Così una sync lenta non può riaprire
+        // una cassaforte appena bloccata né sovrascrivere una modifica appena fatta.
+        const local = fileRef.current
+        const sessAtStart = sessionRef.current
+        const stale = () => fileRef.current !== local || sessionRef.current !== sessAtStart
         const head = await drive.getMeta(fileId)
         setMeta({ ownerEmail: head.ownerEmail, canShare: head.canShare })
-        const local = fileRef.current
         const known = metaRef.current.version
         let remote: VaultFile | null = null
         let remoteVersion = head.version
         // non allineati (cache persa o versione cambiata): si rilegge Drive
         if (!local || head.version !== known) { const r = await drive.readDb(fileId); remote = r.file; remoteVersion = r.meta.version }
         let merged = local
-        let sess = sessionRef.current
+        let sess = sessAtStart
         const dirty = metaRef.current.dirty && !!local
         if (remote) {
           if (!local || !dirty) {
             merged = remote
             if (sess) {
               try { sess = await reopen(remote, sess) } catch (e) {
-                if (e instanceof KeyMismatchError) { setFile(remote); setMeta({ version: remoteVersion, dirty: false }); setSession(null); setLockReason(e.message); persist(); setStatus('idle'); return }
+                if (e instanceof KeyMismatchError) { if (stale()) { again.current = true; continue } await adoptAfterMismatch(e, local, false, remote, remoteVersion); return }
                 throw e
               }
             }
@@ -264,17 +281,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
               const r = await mergeFiles(local!, remote, sess)
               merged = r.file; sess = r.session
             } catch (e) {
-              if (e instanceof KeyMismatchError) {
-                // la Password di Famiglia o quella personale sono cambiate altrove: niente scrittura con la chiave vecchia
-                setFile(remote); setMeta({ version: remoteVersion, dirty: false }); setSession(null); setLockReason(e.message); persist(); setStatus('idle'); return
-              }
+              if (e instanceof KeyMismatchError) { if (stale()) { again.current = true; continue } await adoptAfterMismatch(e, local, true, remote, remoteVersion); return }
               throw e
             }
           }
         }
         if (!merged) throw new Error('Cassaforte non disponibile.')
-        // se nel frattempo l'utente ha modificato, si riparte con la copia aggiornata (niente si perde)
-        if (fileRef.current !== local) { again.current = true; continue }
+        if (stale()) { again.current = true; continue }
         const needsUpload = remote ? !sameFile(merged, remote) : dirty
         let version = remoteVersion
         if (needsUpload) {
@@ -283,14 +296,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
             throw e
           }
         }
-        if (fileRef.current !== local) { again.current = true; continue }
+        if (stale()) { again.current = true; continue } // il file su Drive è già aggiornato: la prossima passata riunisce la modifica nuova
         setFile(merged)
-        if (sess && sess !== sessionRef.current) setSession(sess)
+        if (sess && sess !== sessAtStart) setSession(sess)
         setMeta({ version, dirty: false, lastSyncAt: Date.now() })
         persist()
         done = true
       }
-      if (!done) throw new Error('Troppi conflitti: riprova tra poco.')
+      if (!done && !again.current) throw new Error('Troppi conflitti: riprova tra poco.')
       setStatus('idle'); setStatusMessage('')
     } catch (e) {
       handleSyncError(e)
@@ -298,7 +311,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       syncing.current = false
       if (again.current) { again.current = false; window.setTimeout(() => void runSyncRef.current(), 300) }
     }
-  }, [handleSyncError, persist, setFile, setMeta, setSession])
+  }, [adoptAfterMismatch, handleSyncError, persist, setFile, setMeta, setSession])
   runSyncRef.current = runSync
 
   const syncNow = useCallback(async () => { await runSync() }, [runSync])
@@ -322,6 +335,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }, 60_000)
     return () => window.clearInterval(iv)
   }, [meta.mode, handleSyncError])
+
+  // senza Worker: rinnovo silenzioso del token a ogni tocco (gesto dell'utente), quando restano meno di 15 minuti e l'ultimo tentativo è di oltre 10 minuti fa
+  useEffect(() => {
+    if (meta.mode !== 'drive') return
+    let lastTry = 0
+    const onDown = () => {
+      if (hasSession() || !configRef.current.clientId || !drive.hasValidToken() || drive.tokenRemainingMs() > 15 * 60_000 || Date.now() - lastTry < 10 * 60_000) return
+      lastTry = Date.now()
+      void drive.renewSilently(configRef.current.clientId).catch(() => undefined)
+    }
+    window.addEventListener('pointerdown', onDown, { capture: true, passive: true })
+    return () => window.removeEventListener('pointerdown', onDown, { capture: true })
+  }, [meta.mode])
 
   // identità Google (per capire se sono il Capofamiglia)
   useEffect(() => {
@@ -456,8 +482,22 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     } else if (metaRef.current.dirty || metaRef.current.mode === 'drive') {
       void runSyncRef.current() // unisce eventuali modifiche rimaste in attesa
     }
+    // modifiche messe da parte quando una password è cambiata altrove: si recuperano i blocchi la cui chiave non è cambiata
+    const stash = await loadStash()
+    if (stash && stash.vaultId === f.vaultId) {
+      const rec = await recoverFromStash(stash, r.session)
+      let which = ''
+      try { which = localStorage.getItem(STASH_KEY) ?? '' } catch { /* noop */ }
+      if (rec.common || rec.personal) { setSession(rec.session); enqueueSeal({ common: rec.common, personal: rec.personal }) }
+      const lost = which === 'common' ? 'comuni' : which === 'personal' ? 'personali' : ''
+      setNotice(rec.common || rec.personal
+        ? `Recuperate le modifiche non sincronizzate${lost ? `; quelle ${lost} fatte prima del cambio password non erano recuperabili` : ''}.`
+        : lost ? `Le modifiche ${lost} non sincronizzate fatte prima del cambio password non erano recuperabili.` : '')
+      await saveStash(null)
+      try { localStorage.removeItem(STASH_KEY) } catch { /* noop */ }
+    }
     return { setup: r.setup }
-  }, [persist, scheduleSync, setFile, setMeta, setSession])
+  }, [enqueueSeal, persist, scheduleSync, setFile, setMeta, setSession])
 
   /* ---------- modifiche ai dati ---------- */
   const mine = () => sessionRef.current?.memberId ?? ''
