@@ -1,0 +1,15 @@
+# Copia questo file in worker/wrangler.toml (ignorato da Git) e inserisci l'ID del tuo spazio KV.
+name = "passwordduo-auth"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Origine del sito (solo schema + dominio, senza /password-duo). Più origini separate da virgola.
+ALLOWED_ORIGINS = "https://<utente>.github.io,http://localhost:5173"
+# ID del client OAuth di Google Cloud (identificativo pubblico).
+# Il client secret e SESSION_KEY NON vanno qui: si impostano con `npx wrangler secret put` (vedi worker/README.md).
+GOOGLE_CLIENT_ID = "xxxx.apps.googleusercontent.com"
+
+[[kv_namespaces]]
+binding = "SUBS"
+id = "INSERISCI_QUI_L_ID_DEL_KV"
