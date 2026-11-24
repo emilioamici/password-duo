@@ -7,7 +7,7 @@ import {
   KeyMismatchError, UnlockError, canEditCommon, changeFamilyPassword, changePersonalSecret, createVault, makeMember, mergeFiles,
   mergeRecords, removeMember, reopen, sealFile, tombstoneEntry, unlockVault, upsertMember, verifyPersonalSecret, type Session,
 } from './vaultModel'
-import type { Entry, VaultFile } from '../types'
+import type { Entry } from '../types'
 
 beforeAll(() => setDefaultIterForTests(100_000))
 
