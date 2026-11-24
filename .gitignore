@@ -10,3 +10,4 @@ worker/.wrangler
 
 # documento personale, tenuto offline
 DESIGN_SYSTEM.md
+e2e/out
